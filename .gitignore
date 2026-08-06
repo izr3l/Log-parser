@@ -36,3 +36,7 @@ next-env.d.ts
 .vercel
 .vscode/
 .idea/
+
+# md files
+AGENTS.md
+CLAUDE.md
