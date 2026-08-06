@@ -1,0 +1,63 @@
+2024-01-15 08:12:01.234 [INFO] Application starting up on port 3000
+2024-01-15 08:12:01.456 [INFO] Connected to database at localhost:5432
+2024-01-15 08:12:01.789 [DEBUG] Loading configuration from /etc/app/config.yaml
+2024-01-15 08:12:02.012 [INFO] Cache initialized with 256MB capacity
+2024-01-15 08:12:02.345 [WARNING] Deprecated config key 'max_threads' found, use 'worker_count' instead
+2024-01-15 08:12:03.001 [INFO] Health check endpoint registered at /healthz
+2024-01-15 08:12:05.123 [ERROR] Failed to connect to Redis at 192.168.1.100:6379
+  ConnectionRefusedError: Connection refused
+    at TCPConnectWrap.afterConnect [as oncomplete] (net.js:1141:16)
+    at TCPConnectWrap.callbackTrampoline (internal/async_hooks.js:130:17)
+2024-01-15 08:12:05.456 [WARNING] Falling back to in-memory cache (Redis unavailable)
+2024-01-15 08:12:10.789 [INFO] Request received: GET /api/users from 10.0.0.15
+2024-01-15 08:12:10.890 [DEBUG] Query executed in 45ms: SELECT * FROM users WHERE active = true
+2024-01-15 08:12:11.001 [INFO] Request received: POST /api/orders from 10.0.0.22
+2024-01-15 08:12:11.234 [ERROR] Failed to process order #ORD-2024-78432
+  ValidationError: Invalid payment method 'crypto_wallet'
+    at OrderService.validate (src/services/order.ts:142:11)
+    at OrderController.create (src/controllers/order.ts:58:22)
+    at Router.handle (node_modules/express/lib/router/index.js:275:10)
+2024-01-15 08:12:15.567 [INFO] Request received: GET /api/products from 10.0.0.33
+2024-01-15 08:12:15.890 [INFO] Cache hit for products catalog (TTL: 300s)
+2024-01-15 08:12:20.123 [WARNING] High memory usage detected: 78% (threshold: 75%)
+2024-01-15 08:12:25.456 [ERROR] Failed to connect to Redis at 192.168.1.100:6379
+  ConnectionRefusedError: Connection refused
+    at TCPConnectWrap.afterConnect [as oncomplete] (net.js:1141:16)
+2024-01-15 08:12:30.001 [INFO] Request received: GET /api/users from 10.0.0.15
+2024-01-15 08:12:30.234 [INFO] Request received: PUT /api/users/550e8400-e29b-41d4-a716-446655440000 from 10.0.0.15
+2024-01-15 08:12:30.567 [DEBUG] User profile updated: id=550e8400-e29b-41d4-a716-446655440000
+2024-01-15 08:12:35.890 [ERROR] Unhandled exception in request pipeline
+  TypeError: Cannot read properties of undefined (reading 'email')
+    at UserService.notify (src/services/user.ts:89:24)
+    at UserController.update (src/controllers/user.ts:45:18)
+    at processTicksAndRejections (internal/process/task_queues.js:95:5)
+2024-01-15 08:12:40.123 [WARNING] Rate limit approaching for API key: ak_live_***redacted***
+2024-01-15 08:12:45.456 [INFO] Scheduled job 'cleanup_sessions' started
+2024-01-15 08:12:45.789 [INFO] Cleaned up 1,247 expired sessions
+2024-01-15 08:12:50.001 [ERROR] Failed to process order #ORD-2024-78433
+  ValidationError: Invalid payment method 'crypto_wallet'
+    at OrderService.validate (src/services/order.ts:142:11)
+    at OrderController.create (src/controllers/order.ts:58:22)
+2024-01-15 08:12:55.234 [FATAL] Database connection pool exhausted — no connections available
+  PoolExhaustedError: Timeout acquiring connection from pool after 30000ms
+    at Pool.acquire (node_modules/pg-pool/index.js:189:27)
+    at Client.connect (node_modules/pg/lib/client.js:82:19)
+2024-01-15 08:12:55.567 [ERROR] Multiple request failures detected — circuit breaker OPEN
+2024-01-15 08:13:00.890 [WARNING] High memory usage detected: 82% (threshold: 75%)
+2024-01-15 08:13:05.123 [INFO] Request received: GET /healthz from 10.0.0.1
+2024-01-15 08:13:05.234 [WARNING] Health check returning degraded status
+2024-01-15 08:13:10.456 [INFO] Auto-scaling triggered: requesting additional instance
+2024-01-15 08:13:15.789 [ERROR] Failed to connect to Redis at 192.168.1.100:6379
+  ConnectionRefusedError: Connection refused
+    at TCPConnectWrap.afterConnect [as oncomplete] (net.js:1141:16)
+2024-01-15 08:13:20.001 [INFO] New instance i-0abc123def456 joined the cluster
+2024-01-15 08:13:25.234 [INFO] Database connection pool recovered (15/20 connections available)
+2024-01-15 08:13:25.567 [INFO] Circuit breaker HALF-OPEN — testing recovery
+2024-01-15 08:13:30.890 [INFO] Circuit breaker CLOSED — service recovered
+2024-01-15 08:13:35.123 [DEBUG] Garbage collection completed in 234ms
+2024-01-15 08:13:40.456 [INFO] Request received: GET /api/orders from 10.0.0.44
+2024-01-15 08:13:40.789 [INFO] Cache miss for orders list, querying database
+2024-01-15 08:13:41.001 [DEBUG] Query executed in 128ms: SELECT * FROM orders WHERE status = 'pending'
+2024-01-15 08:13:45.234 [WARNING] Slow query detected (>100ms): SELECT * FROM orders WHERE status = 'pending'
+2024-01-15 08:13:50.567 [INFO] Request received: DELETE /api/sessions/expired from 10.0.0.1
+2024-01-15 08:13:50.890 [INFO] Batch deleted 89 expired sessions

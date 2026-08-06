@@ -1,69 +1,203 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import React, { useCallback, useState, useRef } from "react";
+import { Eye } from "lucide-react";
+import DropZone from "@/components/drop-zone";
+import FormatBanner from "@/components/format-banner";
+import ParseProgress from "@/components/parse-progress";
+import SummaryPanel from "@/components/summary-panel";
+import FilterBar from "@/components/filter-bar";
+import LogList from "@/components/log-list";
+import PatternEditor from "@/components/pattern-editor";
+import { useLogStore } from "@/store/log-store";
+import { sampleLines as readSampleLines, streamFile } from "@/lib/file-reader";
+import { detectFormat } from "@/lib/format-presets";
+import { parseLines, resetCounters } from "@/workers/parse-worker";
+
+export default function HomePage() {
+  const store = useLogStore();
+  const [showPatternEditor, setShowPatternEditor] = useState(false);
+  const [fileSampleLines, setFileSampleLines] = useState<string[]>([]);
+  const currentFileRef = useRef<File | null>(null);
+
+  const handleFileSelected = useCallback(
+    async (file: File) => {
+      // Reset previous state
+      store.reset();
+      resetCounters();
+      currentFileRef.current = file;
+
+      // Set file info
+      store.setFile(file.name, file.size);
+      store.setLoading(true);
+
+      try {
+        // ── Step 1: Sample lines for format detection ──
+        const sample = await readSampleLines(file, 500);
+        setFileSampleLines(sample);
+
+        // ── Step 2: Detect format ──
+        const results = detectFormat(sample, store.customPresets);
+        store.setDetectionResults(results);
+
+        if (results.length > 0) {
+          const best = results[0];
+          store.setFormat(best.preset, best.confidence);
+        }
+
+        // ── Step 3: Parse the full file in chunks ──
+        const activePreset = results[0]?.preset;
+        if (!activePreset) {
+          store.setLoading(false);
+          return;
+        }
+
+        let pendingEntry: ReturnType<typeof parseLines>["pendingEntry"] = null;
+        let totalEntries = 0;
+        const allEntries: ReturnType<typeof parseLines>["entries"] = [];
+
+        await streamFile(file, {
+          onChunk: (lines, progress) => {
+            const result = parseLines(lines, activePreset, pendingEntry);
+            pendingEntry = result.pendingEntry;
+
+            if (result.entries.length > 0) {
+              allEntries.push(...result.entries);
+              totalEntries += result.entries.length;
+
+              // Batch updates to the store every ~500 entries to avoid spam
+              if (totalEntries % 500 < result.entries.length || progress >= 1) {
+                store.addEntries(result.entries);
+              }
+              store.setParseProgress(progress, totalEntries);
+            }
+          },
+          onComplete: () => {
+            // Flush the last pending entry
+            if (pendingEntry) {
+              allEntries.push(pendingEntry);
+              store.addEntries([pendingEntry]);
+            }
+
+            // Build signature groups
+            store.finalizeGroups();
+            store.setParseProgress(1, totalEntries + (pendingEntry ? 1 : 0));
+            store.setLoading(false);
+          },
+          onError: (error) => {
+            console.error("File reading error:", error);
+            store.setLoading(false);
+          },
+        });
+      } catch (error) {
+        console.error("Processing error:", error);
+        store.setLoading(false);
+      }
+    },
+    [store]
+  );
+
+  const handleReparse = useCallback(async () => {
+    // Re-parse with the updated format
+    const file = currentFileRef.current;
+    if (!file || !store.detectedFormat) return;
+
+    // Reset entries but keep file + format info
+    const format = store.detectedFormat;
+    const confidence = store.confidence;
+    store.reset();
+    resetCounters();
+    store.setFile(file.name, file.size);
+    store.setFormat(format, confidence);
+    store.setLoading(true);
+
+    let pendingEntry: ReturnType<typeof parseLines>["pendingEntry"] = null;
+    let totalEntries = 0;
+
+    await streamFile(file, {
+      onChunk: (lines, progress) => {
+        const result = parseLines(lines, format, pendingEntry);
+        pendingEntry = result.pendingEntry;
+
+        if (result.entries.length > 0) {
+          totalEntries += result.entries.length;
+          if (totalEntries % 500 < result.entries.length || progress >= 1) {
+            store.addEntries(result.entries);
+          }
+          store.setParseProgress(progress, totalEntries);
+        }
+      },
+      onComplete: () => {
+        if (pendingEntry) {
+          store.addEntries([pendingEntry]);
+        }
+        store.finalizeGroups();
+        store.setParseProgress(1, totalEntries + (pendingEntry ? 1 : 0));
+        store.setLoading(false);
+      },
+      onError: (error) => {
+        console.error("Re-parse error:", error);
+        store.setLoading(false);
+      },
+    });
+  }, [store]);
+
+  const hasFile = !!store.fileName;
+  const hasEntries = store.entries.length > 0;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
+    <div className="flex flex-col h-screen max-h-screen overflow-hidden bg-[var(--bg)]">
+      {/* ── Header / Nav ─── */}
+      <header className="shrink-0 flex items-center justify-between px-5 py-3 border-b border-[var(--border)] bg-[var(--bg)]/80 backdrop-blur-xl z-10">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--accent)] to-[var(--accent-bright)] flex items-center justify-center shadow-lg shadow-[var(--accent)]/20">
+            <Eye className="w-4 h-4 text-white" />
+          </div>
+          <h1 className="text-lg font-heading font-bold text-[var(--text-primary)] tracking-tight">
+            LogLens
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20">
+            v1.0
+          </span>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          All data stays local
         </div>
+      </header>
+
+      {/* ── Top Panel Controls (shrink-0) ─── */}
+      <div className="shrink-0 flex flex-col">
+        {hasFile && <DropZone onFileSelected={handleFileSelected} />}
+        {hasFile && (
+          <FormatBanner
+            onEditPattern={() => setShowPatternEditor(true)}
+          />
+        )}
+        <ParseProgress />
+        <SummaryPanel />
+        <FilterBar />
+      </div>
+
+      {/* ── Main Content Area (flex-1 min-h-0 overflow-hidden) ─── */}
+      <main className="flex-1 min-h-0 relative flex flex-col overflow-hidden w-full">
+        {!hasFile ? (
+          <DropZone onFileSelected={handleFileSelected} />
+        ) : (
+          <LogList />
+        )}
       </main>
+
+      {/* ── Pattern Editor Modal ─── */}
+      <PatternEditor
+        isOpen={showPatternEditor}
+        onClose={() => setShowPatternEditor(false)}
+        onApply={() => {
+          setShowPatternEditor(false);
+          handleReparse();
+        }}
+        sampleLines={fileSampleLines}
+      />
     </div>
   );
 }
